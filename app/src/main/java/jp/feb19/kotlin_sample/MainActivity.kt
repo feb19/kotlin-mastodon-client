@@ -94,6 +94,7 @@ class MainActivity : AppCompatActivity() {
                     urlConnection.requestMethod = "POST"
 
                     val params = ArrayList<Pair<String, String>>()
+                    params.add(Pair("scopes", "read write follow"))
                     params.add(Pair("client_name", "Mastodon API Example"))
                     params.add(Pair("redirect_uris", "http://localhost"))
 
@@ -146,6 +147,7 @@ class MainActivity : AppCompatActivity() {
                     .apiKey(clientId)
                     .apiSecret(clientSecret)
                     .callback("http://localhost")
+                    .scope("read write follow")
                     .build(MastodonApi.instance(instanceDomain))
         }
 
@@ -207,6 +209,7 @@ class MainActivity : AppCompatActivity() {
 
         override fun onPostExecute(service: OAuth20Service) {
             LoadProfileTask().execute(service)
+            PostStatusTask().execute(service)
         }
     }
 
@@ -215,11 +218,44 @@ class MainActivity : AppCompatActivity() {
         override fun doInBackground(vararg params: OAuth20Service): String? {
             val service = params[0]
             val domain = Uri.parse(service.authorizationUrl).host
+            Log.d("LoadProfileTask", "domain: " + domain)
             var pref = getSharedPreferences("MastodonApiExample", MODE_PRIVATE)
             val token = OAuth2AccessToken(pref.getString(String.format("access_token_for_%s", domain), null))
+            Log.d("LoadProfileTask", "token: " + token)
 
             val request = OAuthRequest(Verb.GET, String.format("https://%s/api/v1/accounts/verify_credentials", domain), service)
             service.signRequest(token, request)
+            val response = request.send()
+
+            try {
+                return response.body
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+
+            return null
+        }
+
+        override fun onPostExecute(response: String) {
+            val debug = findViewById(R.id.textView) as TextView
+            debug.text = response
+        }
+    }
+
+    internal inner class PostStatusTask : AsyncTask<OAuth20Service, Void, String>() {
+
+        override fun doInBackground(vararg params: OAuth20Service): String? {
+            val service = params[0]
+            val domain = Uri.parse(service.authorizationUrl).host
+            Log.d("PostStatusTask", "domain: " + domain)
+            var pref = getSharedPreferences("MastodonApiExample", MODE_PRIVATE)
+            val token = OAuth2AccessToken(pref.getString(String.format("access_token_for_%s", domain), null))
+
+            Log.d("PostStatusTask", "token: " + token)
+            val request = OAuthRequest(Verb.POST, String.format("https://%s/api/v1/statuses", domain), service)
+            request.addBodyParameter("status", "test")
+            service.signRequest(token, request)
+
             val response = request.send()
 
             try {
